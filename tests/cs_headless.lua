@@ -51,9 +51,18 @@ eq(#M.STYLES, 3, "3 styles")
 for _, st in ipairs(M.STYLES) do
     eq(type(st.font), "string", st.id .. " font")
     eq(st.boilAmount > 0 and st.boilAmount < 0.05, true, st.id .. " boil sane")
-    eq(type(st.set), "table", st.id .. " element set")
+    eq(#st.set >= 3, true, st.id .. " element toggles present")
+    -- ordered pairs, Enabled toggles only (config lives in the paste template)
+    for _, kv in ipairs(st.set) do
+        eq(kv[1]:match("^Enabled%d$") ~= nil, true, st.id .. " set entry " .. kv[1])
+    end
+    eq(#st.colorElems >= 1, true, st.id .. " color elements")
+    eq(M.FONT_STYLES[st.font] ~= nil, true, st.id .. " font has style mapping")
 end
 eq(#M.TRANSITIONS, 6, "6 transitions")
+for _, f in ipairs(M.FONTS) do
+    eq(M.FONT_STYLES[f] ~= nil, true, "font style mapped: " .. f)
+end
 
 -- constants carried over from the user's macro
 eq(M.RISE_AMOUNT, 0.044, "macro rise")

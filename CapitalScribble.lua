@@ -29,7 +29,7 @@
 
 CapitalScribble = CapitalScribble or {}
 local M = CapitalScribble
-M.VERSION = "0.9.1"
+M.VERSION = "0.9.2"
 
 ------------------------------------------------------------------
 -- 1. Paths + logging
@@ -103,39 +103,43 @@ end
 ------------------------------------------------------------------
 -- 3. Styles + look constants
 ------------------------------------------------------------------
+-- Element sub-inputs (ElementShape2, Softness5, …) only EXIST while their
+-- element is enabled (verified via diag input dumps 2026-07-16), so element
+-- configuration lives in the paste template; styles just flip Enabled flags.
+-- `set` is an ORDERED list — Enabled toggles first, then anything else.
 M.STYLES = {
     {
         id = "marker", label = "MARKER",
-        font = "Marker Felt", fontStyle = "Wide",
+        font = "Marker Felt",
         boilAmount = 0.0045, glowBlend = 0.0,
-        set = {   -- element setup: solid fill
-            Enabled1 = 1, Enabled2 = 0, Enabled5 = 0,
-        },
+        colorElems = { 1 },
+        set = { { "Enabled1", 1 }, { "Enabled2", 0 }, { "Enabled5", 0 } },
     },
     {
         id = "sketch", label = "SKETCH",
-        font = "Noteworthy", fontStyle = "Bold",
+        font = "Noteworthy",
         boilAmount = 0.007, glowBlend = 0.35,
-        set = {   -- outline only, thin scratchy line
-            Enabled1 = 0,
-            Enabled2 = 1, ElementShape2 = 2, Thickness2 = 0.0045,
-            Enabled5 = 0,
-        },
+        colorElems = { 1, 2 },
+        set = { { "Enabled1", 0 }, { "Enabled2", 1 }, { "Enabled5", 0 } },
     },
     {
-        id = "smooth", label = "SMOOTH",
-        font = "Ethic Serif", fontStyle = "Semibold",
+        id = "smooth", label = "SMOOTH",   -- the user's word-by-word macro look
+        font = "Ethic Serif",
         boilAmount = 0.0015, glowBlend = 0.5,
-        set = {   -- fill + the soft "level 2" halo element from the user's macro
-            Enabled1 = 1, Enabled2 = 0,
-            Enabled5 = 1, ElementShape5 = 2, Level5 = 2,
-            ExtendHorizontal5 = -0.217, ExtendVertical5 = -0.053, Softness5 = 1,
-        },
+        colorElems = { 1, 5 },
+        set = { { "Enabled1", 0 }, { "Enabled2", 0 }, { "Enabled5", 1 } },
     },
 }
 
 M.FONTS = { "Marker Felt", "Noteworthy", "Ethic Serif", "Chalkboard SE",
-            "Bradley Hand", "Comic Sans MS", "Permanent Marker", "Caveat" }
+            "Bradley Hand", "Comic Sans MS", "Permanent Marker", "Caveat", "Georgia" }
+
+-- Text+ renders NOTHING when the Style name doesn't exist for the font.
+M.FONT_STYLES = {
+    ["Marker Felt"] = "Wide", ["Noteworthy"] = "Bold", ["Ethic Serif"] = "Semibold",
+    ["Chalkboard SE"] = "Regular", ["Bradley Hand"] = "Bold", ["Comic Sans MS"] = "Regular",
+    ["Permanent Marker"] = "Regular", ["Caveat"] = "Regular", ["Georgia"] = "Regular",
+}
 
 M.TRANSITIONS = { "None", "Scribble", "Fade", "Scribble + Fade", "Rise + Fade", "Draw-on" }
 
@@ -309,6 +313,25 @@ local STACK_TEMPLATE = [[{
 			Inputs = {
 				UseFrameFormatSettings = Input { Value = 1, },
 				Size = Input { Value = 0.12, },
+				VerticalJustificationNew = Input { Value = 3, },
+				HorizontalJustificationNew = Input { Value = 3, },
+				-- all three style elements ship configured (sub-inputs only
+				-- exist while enabled, so this is the one reliable place);
+				-- Apply() then flips the Enabled flags per chosen style
+				Enabled1 = Input { Value = 1, },
+				Enabled2 = Input { Value = 1, },
+				ElementShape2 = Input { Value = 2, },
+				Level2 = Input { Value = 1, },
+				Thickness2 = Input { Value = 0.0045, },
+				Red2 = Input { Value = 1, },
+				Green2 = Input { Value = 1, },
+				Blue2 = Input { Value = 1, },
+				Enabled5 = Input { Value = 1, },
+				ElementShape5 = Input { Value = 2, },
+				Level5 = Input { Value = 2, },
+				ExtendHorizontal5 = Input { Value = -0.217, },
+				ExtendVertical5 = Input { Value = -0.053, },
+				Softness5 = Input { Value = 1, },
 			},
 			ViewInfo = OperatorInfo { Pos = { 0, 0 } },
 		},
@@ -387,6 +410,12 @@ function M.CreateStack()
     end)
     x, y = x or 0, y or 0
 
+    -- Paste is the PRIMARY route: it is the only way to ship pre-configured
+    -- shading elements (their sub-inputs don't exist until enabled).
+    local ps = M.PasteStack(idx)
+    if ps then return ps end
+
+    M.Log("Paste route failed — falling back to AddTool (element config best-effort)")
     local s = { idx = idx }
     s.Text  = M.AddToolSafe("TextPlus",  "CScribbleText"  .. idx, x, y)
     s.Noise = M.AddToolSafe("FastNoise", "CScribbleNoise" .. idx, x - 1, y + 1)
@@ -394,13 +423,25 @@ function M.CreateStack()
     s.Glow  = M.AddToolSafe("SoftGlow",  "CScribbleGlow"  .. idx, x, y + 2)
 
     if not (s.Text and s.Noise and s.Disp and s.Glow) then
-        -- clean any partial result, then go the Paste route
         for _, part in ipairs({ "Text", "Noise", "Disp", "Glow" }) do
             if s[part] then pcall(function() s[part]:Delete() end) end
         end
-        M.Log("AddTool route failed — trying Paste route")
-        return M.PasteStack(idx)
+        M.Log("AddTool route failed too — no stack")
+        return nil
     end
+
+    -- best-effort element config on this route: enable first so the
+    -- sub-inputs materialize, then configure them
+    M.TrySet(s.Text, "Enabled2", 1)
+    M.TrySet(s.Text, "ElementShape2", 2)
+    M.TrySet(s.Text, "Level2", 1)
+    M.TrySet(s.Text, "Thickness2", 0.0045)
+    M.TrySet(s.Text, "Enabled5", 1)
+    M.TrySet(s.Text, "ElementShape5", 2)
+    M.TrySet(s.Text, "Level5", 2)
+    M.TrySet(s.Text, "ExtendHorizontal5", -0.217)
+    M.TrySet(s.Text, "ExtendVertical5", -0.053)
+    M.TrySet(s.Text, "Softness5", 1)
 
     -- wiring: Text -> Displace(Input), Noise -> Displace(Foreground), Displace -> Glow
     pcall(function() s.Disp.Input = s.Text.Output end)
@@ -500,14 +541,16 @@ function M.Apply(s, opts)
             M.TrySet(s.Text, "StyledText", opts.text or "SCRIBBLE")
         end
 
-        M.TrySet(s.Text, "Font", opts.font or st.font)
-        M.TrySet(s.Text, "Style", opts.fontStyle or st.fontStyle)
+        local font = opts.font or st.font
+        M.TrySet(s.Text, "Font", font)
+        M.TrySet(s.Text, "Style", opts.fontStyle or M.FONT_STYLES[font] or "Regular")
         M.TrySet(s.Text, "Size", opts.size or 0.12)
-        for k, v in pairs(st.set) do M.TrySet(s.Text, k, v) end
-        -- color on fill + outline elements
-        M.TrySet(s.Text, "Red1", r); M.TrySet(s.Text, "Green1", g); M.TrySet(s.Text, "Blue1", b)
-        if st.set.Enabled2 == 1 then
-            M.TrySet(s.Text, "Red2", r); M.TrySet(s.Text, "Green2", g); M.TrySet(s.Text, "Blue2", b)
+        -- ordered: Enabled flags flip first (sub-inputs exist only while enabled)
+        for _, kv in ipairs(st.set) do M.TrySet(s.Text, kv[1], kv[2]) end
+        for _, el in ipairs(st.colorElems) do
+            M.TrySet(s.Text, "Red" .. el, r)
+            M.TrySet(s.Text, "Green" .. el, g)
+            M.TrySet(s.Text, "Blue" .. el, b)
         end
 
         ----------------------------------------------------------
@@ -559,7 +602,7 @@ function M.Apply(s, opts)
             end
         end
 
-        -- fades on the text tool's Blend
+        -- fades on Text+ master Alpha (Text+ has NO Blend input — verified)
         local fadeIn, fadeOut = wants(trIn, "fade"), wants(trOut, "fade")
         if fadeIn or fadeOut then
             local ks = {}
@@ -567,25 +610,25 @@ function M.Apply(s, opts)
             if fadeIn then table.insert(ks, { t = W.inB, v = 1 }) end
             if fadeOut then table.insert(ks, { t = W.outA, v = 1 }) end
             table.insert(ks, { t = W.outB, v = fadeOut and 0 or 1 })
-            M.WriteKeys(M.SplineOf(s.Text, "Blend"), ks)
+            M.WriteKeys(M.SplineOf(s.Text, "Alpha"), ks)
             table.insert(report, "fade keys")
         else
-            M.ClearAnim(s.Text, "Blend")
-            M.TrySet(s.Text, "Blend", 1)
+            M.ClearAnim(s.Text, "Alpha")
+            M.TrySet(s.Text, "Alpha", 1)
         end
 
-        -- draw-on via WriteOn scalars
+        -- draw-on: Text+ write-on range is the Start/End input pair (verified)
         if wants(trIn, "draw") then
-            M.WriteEase(M.SplineOf(s.Text, "WriteOnEnd"), W.inA, 0, W.inB, 1)
+            M.WriteEase(M.SplineOf(s.Text, "End"), W.inA, 0, W.inB, 1)
             table.insert(report, "draw-on in")
         else
-            M.ClearAnim(s.Text, "WriteOnEnd"); M.TrySet(s.Text, "WriteOnEnd", 1)
+            M.ClearAnim(s.Text, "End"); M.TrySet(s.Text, "End", 1)
         end
         if wants(trOut, "draw") then
-            M.WriteEase(M.SplineOf(s.Text, "WriteOnStart"), W.outA, 0, W.outB, 1)
+            M.WriteEase(M.SplineOf(s.Text, "Start"), W.outA, 0, W.outB, 1)
             table.insert(report, "draw-on out")
         else
-            M.ClearAnim(s.Text, "WriteOnStart"); M.TrySet(s.Text, "WriteOnStart", 0)
+            M.ClearAnim(s.Text, "Start"); M.TrySet(s.Text, "Start", 0)
         end
 
         -- block rise (only when not word-by-word; word mode rises per word)
@@ -691,7 +734,7 @@ function M.RunUI()
     local win = disp:AddWindow({
         ID = "CapitalScribbleWin",
         WindowTitle = "CapitalScribble " .. M.VERSION .. "  —  Capital Code",
-        Geometry = { 720, 60, 500, 640 },
+        Geometry = { 720, 60, 560, 640 },
         Spacing = 4,
         ui:VGroup{
             StyleSheet = CSS,
@@ -721,7 +764,7 @@ function M.RunUI()
                 ui:Label{ Text = "Size", Weight = 0 },
                 ui:Slider{ ID = "sizeSld", Minimum = 3, Maximum = 40, Value = 12, Weight = 1 },
                 ui:Label{ Text = "Color", Weight = 0 },
-                ui:LineEdit{ ID = "colorEdit", Text = S.colorHex, MaximumSize = { 72, 22 }, Weight = 0 },
+                ui:LineEdit{ ID = "colorEdit", Text = S.colorHex, MinimumSize = { 76, 22 }, Weight = 0 },
             },
             ui:HGroup(swatchRow),
             ui:HGroup{
@@ -729,21 +772,24 @@ function M.RunUI()
                 ui:Label{ Text = "Boil", Weight = 0 },
                 ui:Slider{ ID = "boilSld", Minimum = 0, Maximum = 100, Value = 50, Weight = 1 },
                 ui:Label{ Text = "redraw every", Weight = 0 },
-                ui:SpinBox{ ID = "boilStep", Minimum = 1, Maximum = 8, Value = 3, Weight = 0 },
+                ui:SpinBox{ ID = "boilStep", Minimum = 1, Maximum = 8, Value = 3,
+                            MinimumSize = { 52, 22 }, Weight = 0 },
                 ui:Label{ Text = "f", Weight = 0 },
             },
             ui:HGroup{
                 Weight = 0,
                 ui:Label{ Text = "In", Weight = 0, MinimumSize = { 24, 14 } },
                 ui:ComboBox{ ID = "trInCmb", Weight = 1 },
-                ui:SpinBox{ ID = "dInSpin", Minimum = 1, Maximum = 120, Value = 12, Weight = 0 },
+                ui:SpinBox{ ID = "dInSpin", Minimum = 1, Maximum = 120, Value = 12,
+                            MinimumSize = { 52, 22 }, Weight = 0 },
                 ui:Label{ Text = "f", Weight = 0 },
             },
             ui:HGroup{
                 Weight = 0,
                 ui:Label{ Text = "Out", Weight = 0, MinimumSize = { 24, 14 } },
                 ui:ComboBox{ ID = "trOutCmb", Weight = 1 },
-                ui:SpinBox{ ID = "dOutSpin", Minimum = 1, Maximum = 120, Value = 12, Weight = 0 },
+                ui:SpinBox{ ID = "dOutSpin", Minimum = 1, Maximum = 120, Value = 12,
+                            MinimumSize = { 52, 22 }, Weight = 0 },
                 ui:Label{ Text = "f", Weight = 0 },
             },
             ui:HGroup{
@@ -751,7 +797,8 @@ function M.RunUI()
                 ui:CheckBox{ ID = "wordChk", Text = "Word-by-word", Checked = false, Weight = 0 },
                 ui:Label{ Text = "delay", Weight = 0 },
                 ui:DoubleSpinBox{ ID = "wordDelay", Minimum = 0.2, Maximum = 12, Decimals = 2,
-                                  SingleStep = 0.1, Value = M.WORD_DELAY, Weight = 0 },
+                                  SingleStep = 0.1, Value = M.WORD_DELAY,
+                                  MinimumSize = { 64, 22 }, Weight = 0 },
                 ui:Label{ Text = "", Weight = 1 },
             },
             ui:HGroup{

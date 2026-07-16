@@ -52,7 +52,7 @@ end
 pcall(function()
     local v = "?"
     pcall(function() v = tostring(fu.Version) end)
-    pcall(function() v = v .. " / " .. tostring(fusion:GetVersion and fusion:GetVersion() or "") end)
+    pcall(function() v = v .. " / " .. tostring(fusion.GetVersion and fusion:GetVersion() or "") end)
     log("ENV  fusion version: %s", v)
 end)
 pcall(function()
@@ -184,10 +184,17 @@ local okRun, err = pcall(function()
     end
     check("XRefraction has scribble keys", (keyCount(s.Disp, "XRefraction") or 0) >= 3,
           tostring(keyCount(s.Disp, "XRefraction")) .. " keys")
-    check("Blend has fade keys", (keyCount(s.Text, "Blend") or 0) >= 2,
-          tostring(keyCount(s.Text, "Blend")) .. " keys")
-    check("WriteOnStart has draw-out keys", (keyCount(s.Text, "WriteOnStart") or 0) >= 2,
-          tostring(keyCount(s.Text, "WriteOnStart")) .. " keys")
+    check("Alpha has fade keys", (keyCount(s.Text, "Alpha") or 0) >= 2,
+          tostring(keyCount(s.Text, "Alpha")) .. " keys")
+    check("Start has draw-out keys", (keyCount(s.Text, "Start") or 0) >= 2,
+          tostring(keyCount(s.Text, "Start")) .. " keys")
+    -- element sub-inputs must exist on the pasted stack (the blocks bug)
+    local function hasInput(tool, name)
+        local ok, inp = pcall(function() return tool[name] end)
+        return ok and inp ~= nil
+    end
+    check("ElementShape2 exists (sketch outline configured)", hasInput(s.Text, "ElementShape2"))
+    check("Softness5 exists (smooth halo configured)", hasInput(s.Text, "Softness5"))
 
     -- follower present with opacity keys
     local fout
