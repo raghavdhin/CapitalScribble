@@ -1,0 +1,25 @@
+Atom {
+	Name = "CapitalScribble",
+	Category = "Scripts/Comp",
+	Author = "Raghav Dhingra",
+	Version = 0.94,
+	Date = {2026, 7, 16},
+	Description = [[<h3 align="center">CapitalScribble</h3><p align="center"><strong>Hand-drawn boiling text animator</strong></p>
+<p>One-panel tool that builds a ready-made Text+ node stack for hand-drawn style text: the strokes "boil" (redraw every N frames like frame-by-frame animation), words can scribble in and out, and phrases can appear word by word.</p>
+<p>Features:</p>
+<ul>
+<li>3 styles: MARKER (solid caps), SKETCH (scratchy outline), SMOOTH (clean serif + glow)</li>
+<li>Boil amount and redraw rate controls (stepped-noise displacement)</li>
+<li>6 transitions, independent in/out: Scribble, Fade, Rise, Draw-on and combos</li>
+<li>Word-by-word sequencing with per-word stagger, rise and opacity ease</li>
+<li>31-font dropdown with verified style names, plus a custom font box</li>
+<li>Creates a clean 4-node stack (Text+ / FastNoise / Displace / SoftGlow) you can merge over any shot and keep tweaking</li>
+</ul>
+<p><strong>Requirements:</strong> the UI uses Fusion's UIManager. It works in Fusion Studio and DaVinci Resolve Studio, and in free DaVinci Resolve up to 19.0.x only (UIManager is Studio-only from Resolve 19.1+).</p>
+<p>Run from Workspace &gt; Scripts &gt; CapitalScribble. Includes CapitalScribbleDiag, an on-machine validator.</p>
+<p>MIT licensed. Source &amp; issues: https://github.com/raghavdhin/CapitalScribble</p>]],
+	Deploy = {
+		"Scripts/Comp/CapitalScribble.lua",
+		"Scripts/Comp/CapitalScribbleDiag.lua",
+	},
+}
