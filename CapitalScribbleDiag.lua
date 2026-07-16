@@ -47,6 +47,23 @@ if not comp then
 end
 
 ------------------------------------------------------------------
+-- 0. environment probe — what does this build actually give us?
+------------------------------------------------------------------
+pcall(function()
+    local v = "?"
+    pcall(function() v = tostring(fu.Version) end)
+    pcall(function() v = v .. " / " .. tostring(fusion:GetVersion and fusion:GetVersion() or "") end)
+    log("ENV  fusion version: %s", v)
+end)
+pcall(function()
+    local a = comp:GetAttrs() or {}
+    log("ENV  comp: name=%s locked=%s", tostring(a.COMPS_Name), tostring(a.COMPB_Locked))
+end)
+log("ENV  comp.AddTool=%s comp.Paste=%s comp.AddToolAction=%s bmd.readfile=%s",
+    type(comp.AddTool), type(comp.Paste), type(comp.AddToolAction),
+    type(bmd and bmd.readfile))
+
+------------------------------------------------------------------
 -- 1. input dumps
 ------------------------------------------------------------------
 local function dumpInputs(tool, label)
@@ -75,12 +92,21 @@ comp:StartUndo("CSDiag")
 local okRun, err = pcall(function()
 
     local probe = {}
-    for regid, label in pairs({ TextPlus = "TextPlus", FastNoise = "FastNoise",
-                                Displace = "Displace", SoftGlow = "SoftGlow" }) do
-        local t
-        pcall(function() t = comp:AddTool(regid, -32768, -32768) end)
-        probe[label] = t
-        dumpInputs(t, label)
+    for _, regid in ipairs({ "TextPlus", "FastNoise", "Displace", "SoftGlow" }) do
+        local t = M.AddToolSafe(regid, "CSDiagProbe_" .. regid, -32768, -32768)
+        probe[regid] = t
+        dumpInputs(t, regid)
+    end
+    if not probe.TextPlus then
+        -- AddTool dead on this build: get the dumps via the Paste route instead
+        log("AddTool probes failed — dumping inputs from a pasted stack")
+        local ps = M.PasteStack("98")
+        if ps then
+            dumpInputs(ps.Text, "TextPlus"); dumpInputs(ps.Noise, "FastNoise")
+            dumpInputs(ps.Disp, "Displace"); dumpInputs(ps.Glow, "SoftGlow")
+            probe.TextPlus = ps.Text
+            probe.__pasted = ps
+        end
     end
     -- follower needs a host
     if probe.TextPlus then
@@ -90,6 +116,14 @@ local okRun, err = pcall(function()
         local fol = out and out:GetTool() or nil
         check("StyledTextFollower via AddModifier", fol ~= nil)
         dumpInputs(fol, "StyledTextFollower")
+    end
+    local pasted = probe.__pasted
+    probe.__pasted = nil
+    if pasted then
+        for _, part in ipairs({ "Text", "Noise", "Disp", "Glow" }) do
+            pcall(function() pasted[part]:Delete() end)
+        end
+        probe.TextPlus = nil
     end
     for _, t in pairs(probe) do pcall(function() t:Delete() end) end
 

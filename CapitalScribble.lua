@@ -29,7 +29,7 @@
 
 CapitalScribble = CapitalScribble or {}
 local M = CapitalScribble
-M.VERSION = "0.9.0"
+M.VERSION = "0.9.1"
 
 ------------------------------------------------------------------
 -- 1. Paths + logging
@@ -287,13 +287,95 @@ local function nextFreeIndex()
     return tostring(i)
 end
 
-local function addTool(regid, name, x, y)
+function M.AddToolSafe(regid, name, x, y)
     local t
-    pcall(function() t = comp:AddTool(regid, x, y) end)
-    if not t then pcall(function() t = comp:AddTool(regid) end) end
+    local ok, err = pcall(function() t = comp:AddTool(regid, x, y) end)
+    if not t then
+        M.Log("AddTool(%s,x,y): ok=%s err=%s result=nil", regid, tostring(ok), tostring(err))
+        ok, err = pcall(function() t = comp:AddTool(regid) end)
+        if not t then
+            M.Log("AddTool(%s): ok=%s err=%s result=nil", regid, tostring(ok), tostring(err))
+        end
+    end
     if t then pcall(function() t:SetAttrs({ TOOLS_Name = name }) end) end
-    if not t then M.Log("FAIL  AddTool %s (%s)", regid, name) end
     return t
+end
+
+-- Plan B: paste the whole pre-wired stack as a .setting table (the same
+-- mechanism as dragging a macro in) — works even where AddTool is unhappy.
+local STACK_TEMPLATE = [[{
+	Tools = ordered() {
+		CScribbleText = TextPlus {
+			Inputs = {
+				UseFrameFormatSettings = Input { Value = 1, },
+				Size = Input { Value = 0.12, },
+			},
+			ViewInfo = OperatorInfo { Pos = { 0, 0 } },
+		},
+		CScribbleNoise = FastNoise {
+			Inputs = {
+				UseFrameFormatSettings = Input { Value = 1, },
+				XScale = Input { Value = 14, },
+				Detail = Input { Value = 6, },
+				Contrast = Input { Value = 1.6, },
+				Brightness = Input { Value = -0.12, },
+				SeetheRate = Input { Value = 0, },
+			},
+			ViewInfo = OperatorInfo { Pos = { -110, 33 } },
+		},
+		CScribbleDisp = Displace {
+			Inputs = {
+				Type = Input { Value = 1, },
+				XChannel = Input { Value = 4, },
+				YChannel = Input { Value = 4, },
+				Input = Input { SourceOp = "CScribbleText", Source = "Output", },
+				Foreground = Input { SourceOp = "CScribbleNoise", Source = "Output", },
+			},
+			ViewInfo = OperatorInfo { Pos = { 0, 33 } },
+		},
+		CScribbleGlow = SoftGlow {
+			Inputs = {
+				Input = Input { SourceOp = "CScribbleDisp", Source = "Output", },
+			},
+			ViewInfo = OperatorInfo { Pos = { 0, 66 } },
+		}
+	}
+}]]
+
+local REGID_TO_PART = { TextPlus = "Text", FastNoise = "Noise",
+                        Displace = "Disp", SoftGlow = "Glow" }
+
+function M.PasteStack(idx)
+    local path = M.DATA_DIR .. "/CScribbleStack.setting"
+    local f = io.open(path, "w")
+    if not f then M.Log("PasteStack: cannot write template"); return nil end
+    f:write(STACK_TEMPLATE); f:close()
+
+    local tbl
+    local ok, err = pcall(function() tbl = bmd.readfile(path) end)
+    if not tbl then
+        M.Log("PasteStack: bmd.readfile failed ok=%s err=%s", tostring(ok), tostring(err))
+        return nil
+    end
+    ok, err = pcall(function() comp:Paste(tbl) end)
+    if not ok then M.Log("PasteStack: Paste failed err=%s", tostring(err)); return nil end
+
+    -- pasted tools come in selected; map them by RegID and stamp our names
+    local s = { idx = idx }
+    local sel = comp:GetToolList(true) or {}
+    for _, t in ipairs(sel) do
+        local part = REGID_TO_PART[t:GetAttrs().TOOLS_RegID]
+        if part and not s[part] then
+            s[part] = t
+            pcall(function() t:SetAttrs({ TOOLS_Name = "CScribble" .. part .. idx }) end)
+        end
+    end
+    if s.Text and s.Noise and s.Disp and s.Glow then
+        M.Log("PasteStack: created stack %s via Paste", idx)
+        return s
+    end
+    M.Log("PasteStack: paste succeeded but tools not found in selection (%d selected)", #sel)
+    return nil
 end
 
 function M.CreateStack()
@@ -306,11 +388,19 @@ function M.CreateStack()
     x, y = x or 0, y or 0
 
     local s = { idx = idx }
-    s.Text  = addTool("TextPlus",  "CScribbleText"  .. idx, x, y)
-    s.Noise = addTool("FastNoise", "CScribbleNoise" .. idx, x - 1, y + 1)
-    s.Disp  = addTool("Displace",  "CScribbleDisp"  .. idx, x, y + 1)
-    s.Glow  = addTool("SoftGlow",  "CScribbleGlow"  .. idx, x, y + 2)
-    if not (s.Text and s.Noise and s.Disp and s.Glow) then return nil end
+    s.Text  = M.AddToolSafe("TextPlus",  "CScribbleText"  .. idx, x, y)
+    s.Noise = M.AddToolSafe("FastNoise", "CScribbleNoise" .. idx, x - 1, y + 1)
+    s.Disp  = M.AddToolSafe("Displace",  "CScribbleDisp"  .. idx, x, y + 1)
+    s.Glow  = M.AddToolSafe("SoftGlow",  "CScribbleGlow"  .. idx, x, y + 2)
+
+    if not (s.Text and s.Noise and s.Disp and s.Glow) then
+        -- clean any partial result, then go the Paste route
+        for _, part in ipairs({ "Text", "Noise", "Disp", "Glow" }) do
+            if s[part] then pcall(function() s[part]:Delete() end) end
+        end
+        M.Log("AddTool route failed — trying Paste route")
+        return M.PasteStack(idx)
+    end
 
     -- wiring: Text -> Displace(Input), Noise -> Displace(Foreground), Displace -> Glow
     pcall(function() s.Disp.Input = s.Text.Output end)
