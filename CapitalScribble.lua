@@ -29,7 +29,7 @@
 
 CapitalScribble = CapitalScribble or {}
 local M = CapitalScribble
-M.VERSION = "0.9.3"
+M.VERSION = "0.9.4"
 
 ------------------------------------------------------------------
 -- 1. Paths + logging
@@ -133,15 +133,40 @@ M.STYLES = {
     },
 }
 
-M.FONTS = { "Marker Felt", "Noteworthy", "Ethic New", "Chalkboard SE",
-            "Bradley Hand", "Comic Sans MS", "Permanent Marker", "Caveat", "Georgia" }
+-- grouped: hand-drawn · serif · script · sans · character
+M.FONTS = {
+    "Marker Felt", "Noteworthy", "Chalkboard SE", "Bradley Hand",
+    "Comic Sans MS", "Permanent Marker", "Caveat",
+    "Ethic New", "EB Garamond", "Instrument Serif", "Playfair Display",
+    "Fraunces", "Young Serif", "Didot", "Baskerville", "Georgia",
+    "Snell Roundhand", "Pinyon Script", "Great Vibes", "Zapfino", "Apple Chancery",
+    "Inter", "Space Grotesk", "Manrope", "Outfit", "Avenir Next", "Optima",
+    "Archivo Black",
+    "American Typewriter", "Special Elite", "Space Mono",
+}
 
 -- Text+ renders NOTHING when the Style name doesn't exist for the font.
+-- Every entry below was verified against the installed font's name table
+-- (variable fonts: against their fvar named instances) on 2026-07-16.
 M.FONT_STYLES = {
     ["Marker Felt"] = "Wide", ["Noteworthy"] = "Bold",
+    ["Chalkboard SE"] = "Regular", ["Bradley Hand"] = "Bold",
+    ["Comic Sans MS"] = "Regular", ["Permanent Marker"] = "Regular",
+    ["Caveat"] = "Regular",
     ["Ethic New"] = "Semibold", ["Ethic Serif"] = "Semibold",
-    ["Chalkboard SE"] = "Regular", ["Bradley Hand"] = "Bold", ["Comic Sans MS"] = "Regular",
-    ["Permanent Marker"] = "Regular", ["Caveat"] = "Regular", ["Georgia"] = "Regular",
+    ["EB Garamond"] = "Regular", ["Instrument Serif"] = "Regular",
+    ["Playfair Display"] = "Regular", ["Fraunces"] = "SemiBold",
+    ["Young Serif"] = "Regular", ["Didot"] = "Regular",
+    ["Baskerville"] = "SemiBold", ["Georgia"] = "Regular",
+    ["Snell Roundhand"] = "Bold", ["Pinyon Script"] = "Regular",
+    ["Great Vibes"] = "Regular", ["Zapfino"] = "Regular",
+    ["Apple Chancery"] = "Chancery",
+    ["Inter"] = "Regular", ["Space Grotesk"] = "Medium",
+    ["Manrope"] = "Medium", ["Outfit"] = "Medium",
+    ["Avenir Next"] = "Medium", ["Optima"] = "Regular",
+    ["Archivo Black"] = "Regular",
+    ["American Typewriter"] = "Regular", ["Special Elite"] = "Regular",
+    ["Space Mono"] = "Regular",
 }
 
 M.TRANSITIONS = { "None", "Scribble", "Fade", "Scribble + Fade", "Rise + Fade", "Draw-on" }
