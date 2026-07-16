@@ -32,13 +32,25 @@ frame-by-frame animation instead of flowing.
 | Style | Look | Default font |
 |---|---|---|
 | MARKER | solid marker caps | Marker Felt |
-| SKETCH | scratchy thin outline + glow | Noteworthy |
-| SMOOTH | serif fill + soft halo + glow (the word-by-word macro look) | Ethic Serif |
+| SKETCH | scratchy thin outline + glow (outline enum decoded at runtime) | Noteworthy |
+| SMOOTH | clean serif fill + soft glow | Ethic New |
 
 ## Transitions (in / out, independent)
 
 None · Scribble (displacement smear resolves into the word) · Fade ·
 Scribble + Fade · Rise + Fade (the macro's word rise) · Draw-on (write-on).
+
+## Fonts
+
+31 curated fonts in the dropdown — hand-drawn (Marker Felt, Noteworthy,
+Permanent Marker, Caveat…), serif (EB Garamond, Instrument Serif, Fraunces,
+Playfair Display, Didot, Baskerville…), script (Snell Roundhand, Pinyon
+Script, Great Vibes, Zapfino…), sans (Inter, Space Grotesk, Manrope,
+Outfit…), and character picks (Special Elite, Space Mono, Archivo Black).
+Anything not shipped with macOS is a free Google Font (OFL/Apache) — install
+them to `~/Library/Fonts` yourself, or type any installed font into the
+custom-font box. Every dropdown entry's Style name is verified against the
+font's name table, because Text+ renders nothing on an invalid style.
 
 ## Install
 
