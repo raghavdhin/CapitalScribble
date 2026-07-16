@@ -196,6 +196,32 @@ local okRun, err = pcall(function()
     check("ElementShape2 exists (sketch outline configured)", hasInput(s.Text, "ElementShape2"))
     check("Softness5 exists (smooth halo configured)", hasInput(s.Text, "Softness5"))
 
+    -- definitive enum label dump (this decodes ElementShape/Level for real)
+    local function dumpEnums(tool, name)
+        local ok, attrs = pcall(function() return tool[name]:GetAttrs() end)
+        if not ok or type(attrs) ~= "table" then log("ENUM %s: no attrs", name); return end
+        for k, v in pairs(attrs) do
+            if type(v) == "table" then
+                local parts = {}
+                for idx, lbl in pairs(v) do
+                    if type(lbl) == "string" then
+                        table.insert(parts, tostring(idx) .. "=" .. lbl)
+                    end
+                end
+                if #parts > 0 then
+                    table.sort(parts)
+                    log("ENUM %s.%s: %s", name, tostring(k), table.concat(parts, " | "))
+                end
+            end
+        end
+    end
+    dumpEnums(s.Text, "ElementShape2")
+    dumpEnums(s.Text, "Level2")
+    dumpEnums(s.Disp, "Type")
+    local sv, sl = M.EnumIndexByLabel(s.Text, "ElementShape2", "text outline")
+    check("ElementShape2 'Text Outline' decodes", sv ~= nil,
+          tostring(sv) .. " (" .. tostring(sl) .. ")")
+
     -- follower present with opacity keys
     local fout
     pcall(function() fout = s.Text.StyledText:GetConnectedOutput() end)

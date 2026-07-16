@@ -29,7 +29,7 @@
 
 CapitalScribble = CapitalScribble or {}
 local M = CapitalScribble
-M.VERSION = "0.9.2"
+M.VERSION = "0.9.3"
 
 ------------------------------------------------------------------
 -- 1. Paths + logging
@@ -117,26 +117,29 @@ M.STYLES = {
     },
     {
         id = "sketch", label = "SKETCH",
+        -- outline element is configured at Apply time via runtime enum
+        -- decode (EnumIndexByLabel); falls back to plain fill if that fails
         font = "Noteworthy",
         boilAmount = 0.007, glowBlend = 0.35,
         colorElems = { 1, 2 },
         set = { { "Enabled1", 0 }, { "Enabled2", 1 }, { "Enabled5", 0 } },
     },
     {
-        id = "smooth", label = "SMOOTH",   -- the user's word-by-word macro look
-        font = "Ethic Serif",
+        id = "smooth", label = "SMOOTH",   -- clean serif + glow (halo element shelved)
+        font = "Ethic New",
         boilAmount = 0.0015, glowBlend = 0.5,
-        colorElems = { 1, 5 },
-        set = { { "Enabled1", 0 }, { "Enabled2", 0 }, { "Enabled5", 1 } },
+        colorElems = { 1 },
+        set = { { "Enabled1", 1 }, { "Enabled2", 0 }, { "Enabled5", 0 } },
     },
 }
 
-M.FONTS = { "Marker Felt", "Noteworthy", "Ethic Serif", "Chalkboard SE",
+M.FONTS = { "Marker Felt", "Noteworthy", "Ethic New", "Chalkboard SE",
             "Bradley Hand", "Comic Sans MS", "Permanent Marker", "Caveat", "Georgia" }
 
 -- Text+ renders NOTHING when the Style name doesn't exist for the font.
 M.FONT_STYLES = {
-    ["Marker Felt"] = "Wide", ["Noteworthy"] = "Bold", ["Ethic Serif"] = "Semibold",
+    ["Marker Felt"] = "Wide", ["Noteworthy"] = "Bold",
+    ["Ethic New"] = "Semibold", ["Ethic Serif"] = "Semibold",
     ["Chalkboard SE"] = "Regular", ["Bradley Hand"] = "Bold", ["Comic Sans MS"] = "Regular",
     ["Permanent Marker"] = "Regular", ["Caveat"] = "Regular", ["Georgia"] = "Regular",
 }
@@ -238,6 +241,30 @@ function M.WriteKeys(spline, list)
     local ok = pcall(function() spline:SetKeyFrames(keys, true) end)
     if not ok then M.Log("FAIL  SetKeyFrames on %s", tostring(spline.Name)) end
     return ok
+end
+
+-- Decode a multibutton/combo input's numeric value from its option LABEL.
+-- (Guessing enum constants burned us twice: ElementShape values differ from
+-- every archive example. The input's own attrs carry the label list.)
+-- Returns value, matchedLabel — or nil if no option matches.
+function M.EnumIndexByLabel(tool, name, wanted)
+    local inp = inputOf(tool, name)
+    if not inp then return nil end
+    local ok, attrs = pcall(function() return inp:GetAttrs() end)
+    if not ok or type(attrs) ~= "table" then return nil end
+    wanted = wanted:lower()
+    for _, v in pairs(attrs) do
+        if type(v) == "table" then
+            local zeroBased = v[0] ~= nil
+            for idx, lbl in pairs(v) do
+                if type(lbl) == "string" and type(idx) == "number"
+                   and lbl:lower() == wanted then
+                    return zeroBased and idx or (idx - 1), lbl
+                end
+            end
+        end
+    end
+    return nil
 end
 
 function M.ClearAnim(tool, name)
@@ -547,6 +574,23 @@ function M.Apply(s, opts)
         M.TrySet(s.Text, "Size", opts.size or 0.12)
         -- ordered: Enabled flags flip first (sub-inputs exist only while enabled)
         for _, kv in ipairs(st.set) do M.TrySet(s.Text, kv[1], kv[2]) end
+        if st.id == "sketch" then
+            -- configure the outline by decoding the actual enum labels
+            local shapeV, shapeL = M.EnumIndexByLabel(s.Text, "ElementShape2", "text outline")
+            local levelV, levelL = M.EnumIndexByLabel(s.Text, "Level2", "character")
+            M.Log("sketch decode: ElementShape2=%s(%s) Level2=%s(%s)",
+                  tostring(shapeV), tostring(shapeL), tostring(levelV), tostring(levelL))
+            if shapeV then
+                M.TrySet(s.Text, "ElementShape2", shapeV)
+                if levelV then M.TrySet(s.Text, "Level2", levelV) end
+                M.TrySet(s.Text, "Thickness2", 0.006)
+            else
+                -- can't identify Text Outline on this build: readable fallback
+                M.Log("sketch decode failed — falling back to fill")
+                M.TrySet(s.Text, "Enabled2", 0)
+                M.TrySet(s.Text, "Enabled1", 1)
+            end
+        end
         for _, el in ipairs(st.colorElems) do
             M.TrySet(s.Text, "Red" .. el, r)
             M.TrySet(s.Text, "Green" .. el, g)
